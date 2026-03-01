@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ModelMentor | ML Dashboard</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-main: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --sidebar-bg: #0f172a;
+            --accent: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 320px;
+            background-color: var(--sidebar-bg);
+            color: white;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        .sidebar h2 { margin: 0; font-size: 1.5rem; color: var(--accent); }
+        .sidebar-section { border-bottom: 1px solid #334155; padding-bottom: 1.5rem; }
+        .sidebar-section h3 { font-size: 0.875rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 1rem; }
+
+        /* Main Content Styling */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        h2, h3 { margin-top: 0; }
+
+        /* Inputs & Buttons */
+        input[type="file"], input[type="text"], select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            margin: 0.5rem 0 1rem 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #f8fafc;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--primary);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 0.5rem;
+        }
+
+        button:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+        button.secondary { background-color: #475569; }
+        button.accent { background-color: var(--accent); }
+
+        /* Results Display */
+        #summary, #eda-results, #training-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        pre { background: #f1f5f9; padding: 1rem; border-radius: 8px; font-size: 0.85rem; overflow-x: auto; }
+        img { max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            background: #334155;
+            color: #cbd5e1;
+        }
+
+        #prediction-output {
+            padding: 1rem;
+            background: #ecfdf5;
+            border-left: 4px solid var(--accent);
+            color: #065f46;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>ModelMentor Pro</h2>
+    
+    <div class="sidebar-section">
+        <h3>1. Carga de Datos</h3>
+        <input type="file" id="fileInput">
+        <button onclick="uploadDataset()">Subir Dataset</button>
+        <span id="datasetId" class="status-badge">No hay ID</span>
+    </div>
+
+    <div class="sidebar-section">
+        <h3>2. Análisis & Limpieza</h3>
+        <button class="secondary" onclick="getSummary()">Ver Summary</button>
+        <button class="secondary" onclick="runEDA()">Run EDA</button>
+        <button class="accent" onclick="runPreprocessing()">Preprocesar Datos</button>
+    </div>
+
+    <div class="sidebar-section">
+        <h3>3. Entrenamiento</h3>
+        <label>Columna Target:</label>
+        <input type="text" id="targetInput" placeholder="Ej: species">
+        
+        <label>Algoritmo:</label>
+        <select id="algorithmSelect">
+            <option value="linear">Linear (Regresión)</option>
+            <option value="logistic">Logistic (Clasificación)</option>
+            <option value="random_forest">Random Forest</option>
+        </select>
+        <button onclick="trainModel()">Entrenar Modelo</button>
+    </div>
+</div>
+
+<div class="main-content">
+    <div id="welcome-card" class="card">
+        <h2>Panel de Control</h2>
+        <p>Bienvenido. Sube un dataset para comenzar el flujo de Machine Learning.</p>
+    </div>
+
+    <div id="summary-card" class="card" style="display:none;">
+        <h3>Resumen del Dataset</h3>
+        <div id="summary"></div>
+    </div>
+
+    <div id="eda-card" class="card" style="display:none;">
+        <h3>Análisis Exploratorio (EDA)</h3>
+        <div id="eda-results"></div>
+    </div>
+
+    <div id="training-card" class="card" style="display:none;">
+        <h3>Resultados del Entrenamiento</h3>
+        <div id="training-results"></div>
+    </div>
+
+    <div id="prediction-form" class="card" style="display:none;">
+        <h3>🔮 Probar el Modelo (Predicción)</h3>
+        <p>Ingresa los datos de las características en formato JSON:</p>
+        <textarea id="predictInput" rows="4">{"feature1": 10, "feature2": 5}</textarea>
+        <button class="accent" onclick="runPrediction()">Ejecutar Predicción</button>
+        <div id="prediction-output-container" style="margin-top: 1rem;">
+            <h3 id="prediction-output">Esperando datos...</h3>
+        </div>
+    </div>
+</div>
+
+<script>
+let DATASET_ID = null;
+let MODEL_ID = null;
+
+// Helper para mostrar cards
+function showCard(id) {
+    document.getElementById(id).style.display = 'block';
+}
+
+async function uploadDataset() {
+    const file = document.getElementById("fileInput").files[0];
+    if(!file) return alert("Selecciona un archivo primero");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("http://127.0.0.1:8000/api/dataset/upload", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await response.json();
+    DATASET_ID = data.dataset_id;
+    document.getElementById("datasetId").innerText = "ID: " + DATASET_ID.substring(0,8) + "...";
+    alert("¡Dataset cargado con éxito!");
+}
+
+async function getSummary() {
+    if(!DATASET_ID) return alert("Sube un dataset");
+    const response = await fetch(`http://127.0.0.1:8000/api/analysis/summary/${DATASET_ID}`);
+    const data = await response.json();
+    const analysis = data.analysis;
+    showCard('summary-card');
+
+    let html = `
+        <div class="card" style="box-shadow:none; background:#f8fafc">
+            <h4>General</h4>
+            <p>Filas: ${analysis.rows} | Cols: ${analysis.columns.length}</p>
+            <p><strong>Categorías:</strong> ${analysis.categorical_columns.join(", ")}</p>
+        </div>
+        <div class="card" style="box-shadow:none; background:#f8fafc">
+            <h4>Nulos detectados</h4>
+            <pre>${JSON.stringify(analysis.nulls, null, 2)}</pre>
+        </div>
+    `;
+    document.getElementById("summary").innerHTML = html;
+}
+
+async function runEDA() {
+    if (!DATASET_ID) return alert("Sube un dataset");
+    const response = await fetch(`http://127.0.0.1:8000/api/eda/run/${DATASET_ID}`);
+    const data = await response.json();
+    showCard('eda-card');
+
+    const container = document.getElementById("eda-results");
+    container.innerHTML = `<p><strong>Resumen:</strong> ${data.eda.summary}</p>`;
+
+    // Renderizado de imágenes mejorado
+    const allImages = [...data.eda.boxplots, ...data.eda.histograms];
+    if(data.eda.correlation) allImages.push(data.eda.correlation);
+
+    allImages.forEach(path => {
+        const img = document.createElement("img");
+        img.src = "http://127.0.0.1:8000" + path;
+        img.style.margin = "5px";
+        container.appendChild(img);
+    });
+}
+
+async function runPreprocessing() {
+    if (!DATASET_ID) return alert("Sube un dataset");
+    const response = await fetch(`http://127.0.0.1:8000/api/preprocessing/run/${DATASET_ID}`, { method: "POST" });
+    const data = await response.json();
+    
+    DATASET_ID = data.processed_dataset_id;
+    document.getElementById("datasetId").innerText = "ID: (Limpio) " + DATASET_ID.substring(0,8);
+    alert("✅ Datos limpiados y listos.");
+}
+
+async function trainModel() {
+    const target = document.getElementById("targetInput").value;
+    const algorithm = document.getElementById("algorithmSelect").value;
+    if (!target) return alert("Escribe el target");
+
+    const response = await fetch("http://127.0.0.1:8000/api/training/train", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataset_id: DATASET_ID, target: target, algorithm: algorithm })
+    });
+
+    const data = await response.json();
+    MODEL_ID = data.model_id; 
+    showCard('training-card');
+    showCard('prediction-form');
+
+    let metricsHtml = `<ul>`;
+    for (let key in data.metrics) {
+        metricsHtml += `<li><strong>${key}:</strong> ${data.metrics[key]}</li>`;
+    }
+    metricsHtml += `</ul>`;
+
+    document.getElementById("training-results").innerHTML = `
+        <div class="card" style="width:100%; box-shadow:none; background:#f0f9ff">
+            <p><strong>Modelo:</strong> ${data.model_id}</p>
+            <p><strong>Problema:</strong> ${data.problem_type}</p>
+            ${metricsHtml}
+        </div>
+    `;
+}
+
+async function runPrediction() {
+    const inputVal = document.getElementById("predictInput").value;
+    let jsonData;
+    try { jsonData = JSON.parse(inputVal); } catch (e) { return alert("JSON inválido"); }
+
+    const response = await fetch("http://127.0.0.1:8000/api/predict/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_id: MODEL_ID, input_data: jsonData })
+    });
+
+    const result = await response.json();
+    document.getElementById("prediction-output").innerText = response.ok ? 
+        "Resultado: " + result.prediction : "Error: " + result.detail;
+}
+</script>
+</body>
+</html>
